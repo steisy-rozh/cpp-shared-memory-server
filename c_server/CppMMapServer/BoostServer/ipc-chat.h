@@ -8,12 +8,10 @@
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/string.hpp>
-#include <boost/interprocess/containers/vector.hpp>
+#include <boost/lockfree/spsc_queue.hpp>
 
 namespace ipc_chat
 {
-    
-
     namespace Shared
     {
         namespace bip = boost::interprocess;
@@ -22,16 +20,10 @@ namespace ipc_chat
 
         using Segment = bip::managed_windows_shared_memory;
         using Manager = Segment::segment_manager;
-
-        template<typename t> 
-            using ManagerAlloc = bip::allocator<t, Manager>;
         using String = bip::basic_string<char, std::char_traits<char>>;
 
-        template <typename Alloc>
         struct Message
         {
-            Message(const Alloc& a_text)
-                : index(0), text(a_text) { }
             explicit Message(index_t index, const String& text)
                 : index(index)
             {
@@ -44,9 +36,8 @@ namespace ipc_chat
             char text[1000];
         };
 
-        using StringMessage = Message<ManagerAlloc<char>>;
-        using MessageAllocator = std::scoped_allocator_adaptor<ManagerAlloc<StringMessage>>;
-        using Messages = bip::vector<StringMessage, MessageAllocator>;
+        using MessageAllocator = bip::allocator<Message, Manager>;
+        using Messages = boost::lockfree::spsc_queue<Message, boost::lockfree::allocator<MessageAllocator>>;
 
         using bip::create_only;
 
@@ -62,9 +53,9 @@ namespace ipc_chat
         Shared::index_t index_ = 0;
     public:
         inline Producer(size_t max_message) :
-            memory_(Shared::create_only, "Local\\CppToPythonChat", /*max_message * sizeof(Shared::StringMessage)*/ 50ul << 20),
+            memory_(Shared::create_only, "Local\\CppToPythonChat", 10ul << 20), // 10 Mib per segment
             message_allocator_(memory_.get_segment_manager()),
-            messages_(*memory_.construct<Shared::Messages>("Messages")(message_allocator_)) 
+            messages_(max_message, message_allocator_) 
         {
         }
         void write_message(const Shared::String& message);
