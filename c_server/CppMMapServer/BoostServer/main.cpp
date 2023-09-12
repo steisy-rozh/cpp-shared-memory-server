@@ -1,23 +1,21 @@
 #include <iostream>
 #include "ipc-chat.h"
 
-void RequestForMessage(ipc_chat::Producer& chat);
+void RequestForMessage();
 
 int main()
 {
     using namespace ipc_chat;
 
-    Producer chat(10);
-
     while (true)
     {
-        RequestForMessage(chat);
+        RequestForMessage();
     }
 
     return 0;
 }
 
-void RequestForMessage(ipc_chat::Producer& chat)
+void RequestForMessage()
 {
     std::cout << "type a message to the chat: " << std::endl;
 
@@ -29,7 +27,7 @@ void RequestForMessage(ipc_chat::Producer& chat)
 
     std::cout << "sending " << sending_message << " to the chat..." << std::endl;
 
-    chat.write_message(sending_message);
+    ipc_chat::write_message(sending_message.c_str());
 
     std::cout << "message sent." << std::endl;
 }

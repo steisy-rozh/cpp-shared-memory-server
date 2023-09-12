@@ -6,6 +6,11 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ProtoServer", "ProtoServer\ProtoServer.vcxproj", "{1596BFA3-424D-4A21-AAB3-6632FDFB631C}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BoostServer", "BoostServer\BoostServer.vcxproj", "{10913114-7DA1-424B-8A3F-013B3A571C6B}"
+	ProjectSection(ProjectDependencies) = postProject
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684} = {86C62FC9-1A13-440D-AFB0-BC4634C83684}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IpcChat", "IpcChat\IpcChat.vcxproj", "{86C62FC9-1A13-440D-AFB0-BC4634C83684}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +36,14 @@ Global
 		{10913114-7DA1-424B-8A3F-013B3A571C6B}.Release|x64.Build.0 = Release|x64
 		{10913114-7DA1-424B-8A3F-013B3A571C6B}.Release|x86.ActiveCfg = Release|Win32
 		{10913114-7DA1-424B-8A3F-013B3A571C6B}.Release|x86.Build.0 = Release|Win32
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Debug|x64.ActiveCfg = Debug|x64
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Debug|x64.Build.0 = Debug|x64
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Debug|x86.ActiveCfg = Debug|Win32
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Debug|x86.Build.0 = Debug|Win32
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x64.ActiveCfg = Release|x64
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x64.Build.0 = Release|x64
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x86.ActiveCfg = Release|Win32
+		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
