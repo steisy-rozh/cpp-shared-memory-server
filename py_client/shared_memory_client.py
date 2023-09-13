@@ -25,8 +25,8 @@ def read_from_memory():
     if d_shm:
         try:
             print(d_shm.readline())
-            read = TransferData.from_buffer_copy(d_shm)
-            print_data(read.Messages)
+            #read = TransferData.from_buffer_copy(d_shm)
+            #print_data(read.Messages)
         finally:
             d_shm.close()
     else:

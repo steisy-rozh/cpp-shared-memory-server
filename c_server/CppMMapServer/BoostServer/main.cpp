@@ -27,7 +27,7 @@ void RequestForMessage()
 
     std::cout << "sending " << sending_message << " to the chat..." << std::endl;
 
-    ipc_chat::write_message(sending_message.c_str());
+    write_message(sending_message.c_str());
 
     std::cout << "message sent." << std::endl;
 }

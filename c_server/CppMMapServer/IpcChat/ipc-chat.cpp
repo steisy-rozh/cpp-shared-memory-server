@@ -1,4 +1,5 @@
 #include "ipc-chat.h"
+#include "string.h"
 
 ipc_chat::Chat& ipc_chat::Chat::StartChat()
 {
@@ -24,27 +25,42 @@ ipc_chat::Shared::index_t ipc_chat::Chat::read_message(Shared::String* message)
 
 	auto reading_message = messages_ptr_->front();
 
+	*message = reading_message.text;
+
 	std::cout << "read a message with index" << reading_message.index << std::endl;
 
 	return reading_message.index;
 }
 
-void ipc_chat::write_message(const char* message)
+void write_message(const char* message)
 {
+	using namespace ipc_chat;
+
 	Chat& chat = Chat::StartChat();
 
 	chat.write_message(message);
 }
 
-int ipc_chat::read_message(const char* message)
+int read_message(char* message)
 {
+	using namespace ipc_chat;
+
 	Chat& chat = Chat::StartChat();
 
-	Shared::String read_message;
+	Shared::String text;
 
-	Shared::index_t index = chat.read_message(&read_message);
+	Shared::index_t index = chat.read_message(&text);
 
-	message = read_message.c_str();
+	Shared::copy(text, message);
 
 	return index;
+}
+
+void ipc_chat::Shared::copy(String& str, char* message)
+{
+	const rsize_t max_size = 1000;
+
+	auto input = str.c_str();
+	auto len = std::min(max_size, strlen(input));
+	strncpy_s(message, len, input, max_size);
 }
