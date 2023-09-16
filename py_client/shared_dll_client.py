@@ -13,7 +13,7 @@ def read_message(ch):
     message_ptr = ctypes.c_char_p()
     try:
         index = ch.read_message(ctypes.byref(message_ptr))
-        if index > 0:
+        if index > 0 and message_ptr.value is not None:
             print(f"[{index}]: {message_ptr.value.decode('utf-8')}")
     except Exception as e:
         print(f"could not read message due to error {e}")

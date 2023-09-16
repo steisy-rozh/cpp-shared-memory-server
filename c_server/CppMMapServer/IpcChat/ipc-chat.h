@@ -11,6 +11,7 @@
 #include <boost/interprocess/allocators/allocator.hpp>
 #include <boost/interprocess/containers/string.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
+#include <boost/interprocess/sync/named_mutex.hpp>
 
 namespace 
 {
@@ -23,10 +24,13 @@ namespace
 
             using bip::create_only;
             using bip::open_only;
+            using bip::open_or_create;
+            using mode = bip::mode_t;
             using index_t = std::uint32_t;
 
             using Segment = bip::managed_windows_shared_memory;
             using Manager = Segment::segment_manager;
+            using MessageMutex = bip::named_mutex;
             using String = bip::basic_string<char, std::char_traits<char>>;
 
             const char MemoryName[] = "Local\\CppToPythonChat";
@@ -58,26 +62,30 @@ namespace
             Shared::Messages* messages_ptr_;
             Shared::index_t index_ = 0;
             std::string queue_name_;
+            Shared::MessageMutex mutex_;
 
             inline Chat(const Shared::String& queue_name, unsigned long memory) :
                 memory_(Shared::create_only, Shared::MemoryName, memory), 
                 message_allocator_(memory_.get_segment_manager()),
                 queue_name_(queue_name),
-                messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_))
+                messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_)),
+                mutex_(Shared::open_or_create, "message_exchange_named_mutex")
             {
-                std::cout << "welcome to the chat, dear writer!" << std::endl;
+                std::cout << "welcome to the chat as writer" << std::endl;
             }
+
             inline Chat(const Shared::String& queue_name) :
                 memory_(Shared::open_only, Shared::MemoryName),
                 message_allocator_(memory_.get_segment_manager()),
                 queue_name_(queue_name),
-                messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_))
+                messages_ptr_(memory_.find<Shared::Messages>(queue_name.c_str()).first),
+                mutex_(Shared::open_or_create, "message_exchange_named_mutex")
             {
-                std::cout << "welcome to the chat, dear reader!" << std::endl;
+                std::cout << "welcome to the chat as reader" << std::endl;
             }
         public:
-            static Chat& StartChat(unsigned long memory);
-            static Chat& StartChat();
+            static Chat& StartChatAsWriter();
+            static Chat& StartChatAsReader();
 
             void write_message(const Shared::String& message);
             Shared::index_t read_message(std::unique_ptr<Shared::String>& message);

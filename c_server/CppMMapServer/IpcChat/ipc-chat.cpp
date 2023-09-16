@@ -1,23 +1,28 @@
 #include "ipc-chat.h"
 #include "string.h"
 #include <memory>
+#include <boost/interprocess/sync/scoped_lock.hpp>
 
-ipc_chat::Chat& ipc_chat::Chat::StartChat()
+ipc_chat::Chat& ipc_chat::Chat::StartChatAsWriter()
 {
-	static ipc_chat::Chat chat("CppToPythonChat");
+	static ipc_chat::Chat chat("CppToPythonChat", Shared::memory);
 	return chat;
 }
 
-ipc_chat::Chat& ipc_chat::Chat::StartChat(unsigned long memory)
+ipc_chat::Chat& ipc_chat::Chat::StartChatAsReader()
 {
-	static ipc_chat::Chat chat("CppToPythonChat", memory);
+	static ipc_chat::Chat chat("CppToPythonChat");
 	return chat;
 }
 
 void ipc_chat::Chat::write_message(const Shared::String& message)
 {
 	Shared::Message sending_message{ ++index_, message };
-	messages_ptr_->push(sending_message);
+
+	{
+		boost::interprocess::scoped_lock lock(mutex_);
+		messages_ptr_->push(sending_message);
+	}
 
 	std::cout << "wrote a message with index " << sending_message.index << std::endl;
 }
@@ -36,6 +41,12 @@ ipc_chat::Shared::index_t ipc_chat::Chat::read_message(std::unique_ptr<Shared::S
 
 	std::cout << "read a message with index" << reading_message.index << std::endl;
 
+	{
+		boost::interprocess::scoped_lock lock(mutex_);
+		messages_ptr_->pop();
+		std::cout << "deleted message from queue" << std::endl;
+	}
+
 	return reading_message.index;
 }
 
@@ -43,7 +54,7 @@ extern "C" void __cdecl write_message(const char* message)
 {
 	using namespace ipc_chat;
 
-	Chat& chat = Chat::StartChat(Shared::memory);
+	Chat& chat = Chat::StartChatAsWriter();
 
 	chat.write_message(message);
 }
@@ -56,7 +67,7 @@ extern "C" int __cdecl read_message(const char** message)
 
 	try 
 	{
-		Chat& chat = Chat::StartChat();
+		Chat& chat = Chat::StartChatAsReader();
 
 		auto text = std::make_unique<Shared::String>();
 
@@ -70,7 +81,7 @@ extern "C" int __cdecl read_message(const char** message)
 	}
 	catch (Shared::bip::interprocess_exception ex)
 	{
-		std::cerr << ex.what() << std::endl;
+		std::cerr << ex.what() << ex.get_error_code() << std::endl;
 	}
 }
 
