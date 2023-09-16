@@ -9,9 +9,11 @@
 #include <boost/interprocess/managed_windows_shared_memory.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
 #include <boost/interprocess/allocators/allocator.hpp>
-#include <boost/interprocess/containers/string.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
-#include <boost/interprocess/sync/named_mutex.hpp>
+#include <boost/interprocess/sync/interprocess_condition.hpp>
+#include <boost/interprocess/sync/interprocess_mutex.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
+#include <boost/interprocess/containers/string.hpp>
 
 namespace 
 {
@@ -25,71 +27,96 @@ namespace
             using bip::create_only;
             using bip::open_only;
             using bip::open_or_create;
-            using mode = bip::mode_t;
-            using index_t = std::uint32_t;
 
             using Segment = bip::managed_windows_shared_memory;
             using Manager = Segment::segment_manager;
-            using MessageMutex = bip::named_mutex;
-            using String = bip::basic_string<char, std::char_traits<char>>;
+            using IOMutex = bip::interprocess_mutex;
+            using IOWaitCondition = bip::interprocess_condition;
+            using Guard = bip::scoped_lock<IOMutex>;
 
-            const char MemoryName[] = "Local\\CppToPythonChat";
+            const char *MemoryName = "CppToPythonChat.bin";
             const size_t QueueCapacity = 5000;
-            const unsigned long memory = 10ul << 20; // 10 Mib per segment
+            const unsigned long MemorySizePerSegment = 10ul << 20; // 10 Mib per segment
 
-            struct Message
-            {
-                explicit Message(index_t index, const String& text)
-                    : index(index), text(text)
-                {
-                }
+            template <class TElement>
+            using ElementAllocator = bip::allocator<TElement, Manager>;
 
-                index_t index;
-                String text;
-            };
+            template <class TElement>
+            using ElementQueue = bl::spsc_queue<TElement, bl::allocator<ElementAllocator<TElement>>, bl::fixed_sized<true>, bl::capacity<QueueCapacity>>;
 
-            using MessageAllocator = bip::allocator<Message, Manager>;
-            using Messages = bl::spsc_queue<Message, bl::allocator<MessageAllocator>, bl::fixed_sized<true>, bl::capacity<QueueCapacity>>;
-
-            inline void remove(Segment& memory, const char* queue_name) { memory.destroy<Messages>(queue_name); std::cout << "remove the chat" << std::endl; };
+            template <class TElement>
+            inline void remove(Segment& memory) { memory.destroy<ElementQueue<TElement>>(MemoryName); };
         }
 
-        class Chat
+        namespace Sync
+        {
+            template <class TElement>
+            class SyncQueue
+            {
+            private:
+                Shared::ElementQueue<TElement> queue_ring_;
+                mutable Shared::IOMutex mutex_;
+                mutable Shared::IOWaitCondition wait_condition_;
+            public:
+                SyncQueue(Shared::ElementAllocator<TElement> allocator) :
+                    queue_ring_(Shared::QueueCapacity, allocator) {};
+
+                virtual ~SyncQueue() noexcept;
+
+                void push(TElement element);
+                void pop(TElement& element);
+                bool empty() const;
+            };
+        }
+
+        struct Message
+        {
+            using index_t = std::uint32_t;
+            using string = Shared::bip::string;
+
+            index_t index;
+            string text;
+
+            Message(index_t index, string text)
+                : index(index), text(text) 
+            {
+                std::cout << "index #" << index << " with message " << text << std::endl;
+            };
+        };
+
+        using MessageQueue = Sync::SyncQueue<Message>;
+        using MessageAllocator = Shared::ElementAllocator<Message>;
+
+        class ChatWriter
         {
         private:
             Shared::Segment memory_;
-            Shared::MessageAllocator message_allocator_;
-            Shared::Messages* messages_ptr_;
-            Shared::index_t index_ = 0;
-            std::string queue_name_;
-            Shared::MessageMutex mutex_;
-
-            inline Chat(const Shared::String& queue_name, unsigned long memory) :
-                memory_(Shared::create_only, Shared::MemoryName, memory), 
-                message_allocator_(memory_.get_segment_manager()),
-                queue_name_(queue_name),
-                messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_)),
-                mutex_(Shared::open_or_create, "message_exchange_named_mutex")
-            {
-                std::cout << "welcome to the chat as writer" << std::endl;
-            }
-
-            inline Chat(const Shared::String& queue_name) :
-                memory_(Shared::open_only, Shared::MemoryName),
-                message_allocator_(memory_.get_segment_manager()),
-                queue_name_(queue_name),
-                messages_ptr_(memory_.find<Shared::Messages>(queue_name.c_str()).first),
-                mutex_(Shared::open_or_create, "message_exchange_named_mutex")
-            {
-                std::cout << "welcome to the chat as reader" << std::endl;
-            }
+            MessageAllocator allocator_;
+            MessageQueue* messages_ptr_;
         public:
-            static Chat& StartChatAsWriter();
-            static Chat& StartChatAsReader();
+            inline ChatWriter(std::string& queue_name) :
+                memory_(Shared::create_only, Shared::MemoryName, Shared::MemorySizePerSegment),
+                allocator_(memory_.get_segment_manager()),
+                messages_ptr_(memory_.construct<MessageQueue>(queue_name.c_str())(allocator_)) {};
+            virtual ~ChatWriter() noexcept;
+            void wait_to_request();
+            void send_message(Message message);
+        };
 
-            void write_message(const Shared::String& message);
-            Shared::index_t read_message(std::unique_ptr<Shared::String>& message);
-            inline virtual ~Chat() noexcept { Shared::remove(memory_, queue_name_.c_str()); }
+        class ChatReader
+        {
+        private:
+            Shared::Segment memory_;
+            MessageQueue* messages_ptr_;
+        public:
+            inline ChatReader(std::string& queue_name) :
+                memory_(Shared::open_only, Shared::MemoryName),
+                messages_ptr_(memory_.find<MessageQueue>(queue_name.c_str()).first) 
+            {
+                std::cout << "a reader created" << std::endl;
+            };
+            virtual ~ChatReader() noexcept;
+            Message read_message();
         };
     }
 }
@@ -98,6 +125,5 @@ extern "C"
 {
     __declspec(dllexport) void __cdecl write_message(const char* message);
     __declspec(dllexport) int __cdecl read_message(const char** message);
-    __declspec(dllexport) void __cdecl free_message(const char** message);
 };
 

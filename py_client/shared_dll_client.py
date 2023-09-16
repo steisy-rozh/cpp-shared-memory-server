@@ -17,8 +17,6 @@ def read_message(ch):
             print(f"[{index}]: {message_ptr.value.decode('utf-8')}")
     except Exception as e:
         print(f"could not read message due to error {e}")
-    finally:
-        ch.free_message(message_ptr)
 
 
 if __name__ == '__main__':

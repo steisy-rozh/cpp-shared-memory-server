@@ -1,92 +1,115 @@
 #include "ipc-chat.h"
-#include "string.h"
-#include <memory>
-#include <boost/interprocess/sync/scoped_lock.hpp>
 
-ipc_chat::Chat& ipc_chat::Chat::StartChatAsWriter()
+template<class TElement>
+ipc_chat::Sync::SyncQueue<TElement>::~SyncQueue() noexcept
 {
-	static ipc_chat::Chat chat("CppToPythonChat", Shared::memory);
-	return chat;
+	wait_condition_.notify_all();
 }
 
-ipc_chat::Chat& ipc_chat::Chat::StartChatAsReader()
+template<class TElement>
+inline void ipc_chat::Sync::SyncQueue<TElement>::push(TElement element)
 {
-	static ipc_chat::Chat chat("CppToPythonChat");
-	return chat;
+	Shared::Guard lock(mutex_);
+
+	queue_ring_.push(element);
+	
+	wait_condition_.notify_one();
 }
 
-void ipc_chat::Chat::write_message(const Shared::String& message)
+template<class TElement>
+void ipc_chat::Sync::SyncQueue<TElement>::pop(TElement& element)
 {
-	Shared::Message sending_message{ ++index_, message };
+	Shared::Guard lock(mutex_);
 
+	while (queue_ring_.read_available() == 0)
 	{
-		boost::interprocess::scoped_lock lock(mutex_);
-		messages_ptr_->push(sending_message);
+		wait_condition_.wait(lock);
 	}
 
-	std::cout << "wrote a message with index " << sending_message.index << std::endl;
+	element = queue_ring_.front();
+	queue_ring_.pop();
 }
 
-ipc_chat::Shared::index_t ipc_chat::Chat::read_message(std::unique_ptr<Shared::String>& message)
+template<class TElement>
+bool ipc_chat::Sync::SyncQueue<TElement>::empty() const
 {
-	if (messages_ptr_->empty())
-	{
-		std::cout << "no messages in chat" << std::endl;
-		return 0;
-	}
+	Shared::Guard lock(mutex_);
 
-	auto reading_message = messages_ptr_->front();
-
-	*message = reading_message.text;
-
-	std::cout << "read a message with index" << reading_message.index << std::endl;
-
-	{
-		boost::interprocess::scoped_lock lock(mutex_);
-		messages_ptr_->pop();
-		std::cout << "deleted message from queue" << std::endl;
-	}
-
-	return reading_message.index;
+	return queue_ring_.read_available() == 0;
 }
 
-extern "C" void __cdecl write_message(const char* message)
+ipc_chat::ChatWriter::~ChatWriter() noexcept
+{
+	Shared::remove<Message>(memory_);
+	std::cout << "remove chared chat" << std::endl;
+}
+
+void ipc_chat::ChatWriter::wait_to_request()
+{
+	while (!messages_ptr_->empty())
+		continue;
+}
+
+void ipc_chat::ChatWriter::send_message(Message message)
+{
+	messages_ptr_->push(message);
+}
+
+ipc_chat::ChatReader::~ChatReader() noexcept
+{
+}
+
+ipc_chat::Message ipc_chat::ChatReader::read_message()
+{
+	Message message(0, "empty");
+	messages_ptr_->pop(message);
+
+	return message;
+}
+
+void __cdecl write_message(const char* message)
 {
 	using namespace ipc_chat;
 
-	Chat& chat = Chat::StartChatAsWriter();
+	static Message::index_t index = 0;
+	static std::string queue_name("Chat");
+	static ChatWriter writer(queue_name);
 
-	chat.write_message(message);
+	try 
+	{		
+		writer.wait_to_request();
+
+		Message sending_message(++index, message);
+		writer.send_message(sending_message);
+	}
+	catch (Shared::bip::interprocess_exception exception)
+	{
+		std::cerr << exception.what() << std::endl;
+	}
+
+	std::cout << "message #" << index << " sent" << std::endl;
 }
 
-extern "C" int __cdecl read_message(const char** message)
+int __cdecl read_message(const char** message)
 {
 	using namespace ipc_chat;
 
-	std::cout << "creating a message queue..." << std::endl;
+	static std::string queue_name("Chat");
 
 	try 
 	{
-		Chat& chat = Chat::StartChatAsReader();
+		ChatReader reader(queue_name);
 
-		auto text = std::make_unique<Shared::String>();
+		auto read_message = reader.read_message();
 
-		std::cout << "reading a message from the queue..." << std::endl;
+		*message = read_message.text.c_str();
 
-		auto index = chat.read_message(text);
+		std::cout << "message #" << read_message.index << " read" << std::endl;
 
-		*message = text->c_str();
-
-		return index;
+		return read_message.index;
 	}
-	catch (Shared::bip::interprocess_exception ex)
+	catch (Shared::bip::interprocess_exception exception)
 	{
-		std::cerr << ex.what() << ex.get_error_code() << std::endl;
+		std::cerr << exception.what() << std::endl;
 	}
-}
-
-extern "C" void __cdecl free_message(const char** message)
-{
-	delete message;
-	std::cout << "message complete" << std::endl;
 }
