@@ -1,9 +1,16 @@
 #include "ipc-chat.h"
 #include "string.h"
+#include <memory>
 
 ipc_chat::Chat& ipc_chat::Chat::StartChat()
 {
 	static ipc_chat::Chat chat("CppToPythonChat");
+	return chat;
+}
+
+ipc_chat::Chat& ipc_chat::Chat::StartChat(unsigned long memory)
+{
+	static ipc_chat::Chat chat("CppToPythonChat", memory);
 	return chat;
 }
 
@@ -15,7 +22,7 @@ void ipc_chat::Chat::write_message(const Shared::String& message)
 	std::cout << "wrote a message with index " << sending_message.index << std::endl;
 }
 
-ipc_chat::Shared::index_t ipc_chat::Chat::read_message(Shared::String* message)
+ipc_chat::Shared::index_t ipc_chat::Chat::read_message(std::unique_ptr<Shared::String>& message)
 {
 	if (messages_ptr_->empty())
 	{
@@ -32,35 +39,43 @@ ipc_chat::Shared::index_t ipc_chat::Chat::read_message(Shared::String* message)
 	return reading_message.index;
 }
 
-void write_message(const char* message)
+extern "C" void __cdecl write_message(const char* message)
 {
 	using namespace ipc_chat;
 
-	Chat& chat = Chat::StartChat();
+	Chat& chat = Chat::StartChat(Shared::memory);
 
 	chat.write_message(message);
 }
 
-int read_message(char* message)
+extern "C" int __cdecl read_message(const char** message)
 {
 	using namespace ipc_chat;
 
-	Chat& chat = Chat::StartChat();
+	std::cout << "creating a message queue..." << std::endl;
 
-	Shared::String text;
+	try 
+	{
+		Chat& chat = Chat::StartChat();
 
-	Shared::index_t index = chat.read_message(&text);
+		auto text = std::make_unique<Shared::String>();
 
-	Shared::copy(text, message);
+		std::cout << "reading a message from the queue..." << std::endl;
 
-	return index;
+		auto index = chat.read_message(text);
+
+		*message = text->c_str();
+
+		return index;
+	}
+	catch (Shared::bip::interprocess_exception ex)
+	{
+		std::cerr << ex.what() << std::endl;
+	}
 }
 
-void ipc_chat::Shared::copy(String& str, char* message)
+extern "C" void __cdecl free_message(const char** message)
 {
-	const rsize_t max_size = 1000;
-
-	auto input = str.c_str();
-	auto len = std::min(max_size, strlen(input));
-	strncpy_s(message, len, input, max_size);
+	delete message;
+	std::cout << "message complete" << std::endl;
 }

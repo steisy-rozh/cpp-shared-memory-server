@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cmath>
 #include <string>
+#include <memory>
 #include <scoped_allocator>
 #include <boost/interprocess/managed_windows_shared_memory.hpp>
 #include <boost/interprocess/managed_mapped_file.hpp>
@@ -21,6 +22,7 @@ namespace
             namespace bl = boost::lockfree;
 
             using bip::create_only;
+            using bip::open_only;
             using index_t = std::uint32_t;
 
             using Segment = bip::managed_windows_shared_memory;
@@ -29,6 +31,7 @@ namespace
 
             const char MemoryName[] = "Local\\CppToPythonChat";
             const size_t QueueCapacity = 5000;
+            const unsigned long memory = 10ul << 20; // 10 Mib per segment
 
             struct Message
             {
@@ -44,9 +47,7 @@ namespace
             using MessageAllocator = bip::allocator<Message, Manager>;
             using Messages = bl::spsc_queue<Message, bl::allocator<MessageAllocator>, bl::fixed_sized<true>, bl::capacity<QueueCapacity>>;
 
-            inline void remove(Segment& memory, const char* queue_name) { memory.destroy<Messages>(queue_name); };
-
-            void copy(String& input, char* message);
+            inline void remove(Segment& memory, const char* queue_name) { memory.destroy<Messages>(queue_name); std::cout << "remove the chat" << std::endl; };
         }
 
         class Chat
@@ -58,17 +59,28 @@ namespace
             Shared::index_t index_ = 0;
             std::string queue_name_;
 
-            inline Chat(const Shared::String& queue_name) :
-                memory_(Shared::create_only, Shared::MemoryName, 10ul << 20), // 10 Mib per segment
+            inline Chat(const Shared::String& queue_name, unsigned long memory) :
+                memory_(Shared::create_only, Shared::MemoryName, memory), 
                 message_allocator_(memory_.get_segment_manager()),
                 queue_name_(queue_name),
                 messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_))
-            {}
+            {
+                std::cout << "welcome to the chat, dear writer!" << std::endl;
+            }
+            inline Chat(const Shared::String& queue_name) :
+                memory_(Shared::open_only, Shared::MemoryName),
+                message_allocator_(memory_.get_segment_manager()),
+                queue_name_(queue_name),
+                messages_ptr_(memory_.construct<Shared::Messages>(queue_name_.c_str())(Shared::QueueCapacity, message_allocator_))
+            {
+                std::cout << "welcome to the chat, dear reader!" << std::endl;
+            }
         public:
+            static Chat& StartChat(unsigned long memory);
             static Chat& StartChat();
 
             void write_message(const Shared::String& message);
-            Shared::index_t read_message(Shared::String* message);
+            Shared::index_t read_message(std::unique_ptr<Shared::String>& message);
             inline virtual ~Chat() noexcept { Shared::remove(memory_, queue_name_.c_str()); }
         };
     }
@@ -77,6 +89,7 @@ namespace
 extern "C"
 {
     __declspec(dllexport) void __cdecl write_message(const char* message);
-    __declspec(dllexport) int __cdecl read_message(char* message);
+    __declspec(dllexport) int __cdecl read_message(const char** message);
+    __declspec(dllexport) void __cdecl free_message(const char** message);
 };
 

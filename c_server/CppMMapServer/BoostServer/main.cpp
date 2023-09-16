@@ -23,11 +23,9 @@ void RequestForMessage()
 
     std::getline(std::cin, message);
 
-    ipc_chat::Shared::String sending_message(message.c_str());
+    std::cout << "sending " << message << " to the chat..." << std::endl;
 
-    std::cout << "sending " << sending_message << " to the chat..." << std::endl;
-
-    write_message(sending_message.c_str());
+    write_message(message.c_str());
 
     std::cout << "message sent." << std::endl;
 }

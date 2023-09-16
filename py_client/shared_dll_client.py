@@ -4,19 +4,21 @@ import time
 
 def start_chat():
     ichat = ctypes.WinDLL("./IpcChat.dll")
-    ichat.read_message.argtypes = (ctypes.c_char_p, )
+    ichat.read_message.argtypes = [ctypes.POINTER(ctypes.c_char_p)]
     ichat.read_message.restype = ctypes.c_int32
     return ichat
 
 
-def read_message(chat):
-    message = ctypes.c_char_p()
+def read_message(ch):
+    message_ptr = ctypes.c_char_p()
     try:
-        index = chat.read_message(message)
+        index = ch.read_message(ctypes.byref(message_ptr))
         if index > 0:
-            print(f"[{index}]: {message}")
+            print(f"[{index}]: {message_ptr.value.decode('utf-8')}")
     except Exception as e:
         print(f"could not read message due to error {e}")
+    finally:
+        ch.free_message(message_ptr)
 
 
 if __name__ == '__main__':
