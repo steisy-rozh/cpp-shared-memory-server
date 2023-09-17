@@ -12,6 +12,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BoostServer", "BoostServer\
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "IpcChat", "IpcChat\IpcChat.vcxproj", "{86C62FC9-1A13-440D-AFB0-BC4634C83684}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BoostClient", "BoostClient\BoostClient.vcxproj", "{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -44,6 +46,14 @@ Global
 		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x64.Build.0 = Release|x64
 		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x86.ActiveCfg = Release|Win32
 		{86C62FC9-1A13-440D-AFB0-BC4634C83684}.Release|x86.Build.0 = Release|Win32
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Debug|x64.ActiveCfg = Debug|x64
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Debug|x64.Build.0 = Debug|x64
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Debug|x86.ActiveCfg = Debug|Win32
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Debug|x86.Build.0 = Debug|Win32
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Release|x64.ActiveCfg = Release|x64
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Release|x64.Build.0 = Release|x64
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Release|x86.ActiveCfg = Release|Win32
+		{ABF6C8C1-B8D4-4B98-93F8-C0AA53B4B176}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

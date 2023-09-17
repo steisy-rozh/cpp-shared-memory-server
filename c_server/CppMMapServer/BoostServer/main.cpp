@@ -7,6 +7,8 @@ int main()
 {
     using namespace ipc_chat;
 
+    write_message("welcome to the chat!");
+
     while (true)
     {
         RequestForMessage();
